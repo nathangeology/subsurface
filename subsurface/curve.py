@@ -2,18 +2,34 @@
 """
 Python installation file.
 """
+import xarray as xr
+from nptyping import Array
+
+
 class Curve(object):
 
-    def __init__(self, data, params=None):
-
-        obj = np.asarray(data).view(cls).copy()
-
-        params = params or {}
-
-        for k, v in params.items():
-            setattr(obj, k, v)
-
+    def __init__(self, data: Array, basis=None):
+        """Seismic data object based on xarray.DataArray.
+        
+        Args:
+            data (Array): np.ndarray of the log curve.
+        """
+        self._xarray = xr.DataArray(data, coords=[basis], dims=['depth'], name='data')
         return
+        
+    def __getattr__(self, attr):
+        if attr in self.__dict__:
+            return getattr(self, attr)
+        return getattr(self._xarray, attr)
+    
+    def __getitem__(self, item):
+        if isinstance(item, str):
+            return self._xarray._getitem_coord(item)
+
+        # preserve coordinates 
+        cp = list(self._xarray.coords.items())  # parent coordinates
+        coords = [(cp[i]) for i, it in enumerate(item) if not type(it) == int]
+        return Seismic(self._xarray[item].data, coords=coords)
 
     def __copy__(self):
         cls = self.__class__
