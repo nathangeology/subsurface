@@ -2,40 +2,41 @@
 """
 Python installation file.
 """
+import warnings
+
+import numpy as np
 import xarray as xr
-from nptyping import Array
+import matplotlib.pyplot as plt
+
+
+class CurveError:
+    pass
 
 
 class Curve(object):
 
-    def __init__(self, data: Array, basis=None):
+    def __init__(self, data, basis=None):
         """Seismic data object based on xarray.DataArray.
-        
+
         Args:
             data (Array): np.ndarray of the log curve.
         """
         self._xarray = xr.DataArray(data, coords=[basis], dims=['depth'], name='data')
         return
-        
+
     def __getattr__(self, attr):
         if attr in self.__dict__:
             return getattr(self, attr)
         return getattr(self._xarray, attr)
-    
+
     def __getitem__(self, item):
         if isinstance(item, str):
             return self._xarray._getitem_coord(item)
 
-        # preserve coordinates 
+        # Preserve coordinates.
         cp = list(self._xarray.coords.items())  # parent coordinates
         coords = [(cp[i]) for i, it in enumerate(item) if not type(it) == int]
-        return Seismic(self._xarray[item].data, coords=coords)
-
-    def __copy__(self):
-        cls = self.__class__
-        result = cls.__new__(cls)
-        result.__dict__.update(self.__dict__)
-        return result
+        return Curve(self._xarray[item].data, coords=coords)
 
     def _repr_html_(self):
         """
@@ -82,49 +83,6 @@ class Curve(object):
         html = '<table>{}</table>'.format(rows)
         return html
 
-    @property
-    def values(self):
-        return np.array(self)
-
-    @property
-    def stop(self):
-        """
-        The stop depth. Computed on the fly from the start,
-        the step, and the length of the curve.
-        """
-        return self.start + (self.shape[0] - 1) * self.step
-
-    @property
-    def basis(self):
-        """
-        The depth or time basis of the curve's points. Computed
-        on the fly from the start, stop and step.
-
-        Returns
-            ndarray. The array, the same length as the curve.
-        """
-        return np.linspace(self.start, self.stop, self.shape[0], endpoint=True)
-
-    def describe(self):
-        """
-        Return basic statistics about the curve.
-        """
-        stats = {}
-        stats['samples'] = self.shape[0]
-        stats['nulls'] = self[np.isnan(self)].shape[0]
-        stats['mean'] = float(np.nanmean(self.real))
-        stats['min'] = float(np.nanmin(self.real))
-        stats['max'] = float(np.nanmax(self.real))
-        return stats
-
-    def get_alias(self, alias):
-        """
-        Given a mnemonic, get the alias name(s) it falls under. If there aren't
-        any, you get an empty list.
-        """
-        alias = alias or {}
-        return [k for k, v in alias.items() if self.mnemonic in v]
-
     def plot(self, ax=None, **kwargs):
         """
         Plot a curve.
@@ -160,214 +118,24 @@ class Curve(object):
         else:
             return None
 
-    def _read_at(self, d,
-                 interpolation='linear',
-                 index=False,
-                 return_basis=False):
-        """
-        Private function. Implements read_at() for a single depth.
-
-        Args:
-            d (float)
-            interpolation (str)
-            index(bool)
-            return_basis (bool)
-
-        Returns:
-            float
-        """
-        method = {'linear': utils.linear,
-                  'none': None}
-
-        i, d = utils.find_previous(self.basis,
-                                   d,
-                                   index=True,
-                                   return_distance=True)
-
-        if index:
-            return i
-        else:
-            return method[interpolation](self[i], self[i+1], d)
-
-    def read_at(self, d, **kwargs):
-        """
-        Read the log at a specific depth or an array of depths.
-
-        Args:
-            d (float or array-like)
-            interpolation (str)
-            index(bool)
-            return_basis (bool)
-
-        Returns:
-            float or ndarray.
-        """
-        try:
-            return np.array([self._read_at(depth, **kwargs) for depth in d])
-        except:
-            return self._read_at(d, **kwargs)
-
-    def block(self,
-              cutoffs=None,
-              values=None,
-              n_bins=0,
-              right=False,
-              function=None):
-        """
-        Block a log based on number of bins, or on cutoffs.
-
-        Args:
-            cutoffs (array)
-            values (array): the values to map to. Defaults to [0, 1, 2,...]
-            n_bins (int)
-            right (bool)
-            function (function): transform the log if you want.
-
-        Returns:
-            Curve.
-        """
-        # We'll return a copy.
-        params = self.__dict__.copy()
-
-        if (values is not None) and (cutoffs is None):
-            cutoffs = values[1:]
-
-        if (cutoffs is None) and (n_bins == 0):
-            cutoffs = np.mean(self)
-
-        if (n_bins != 0) and (cutoffs is None):
-            mi, ma = np.amin(self), np.amax(self)
-            cutoffs = np.linspace(mi, ma, n_bins+1)
-            cutoffs = cutoffs[:-1]
-
-        try:  # To use cutoff as a list.
-            data = np.digitize(self, cutoffs, right)
-        except ValueError:  # It's just a number.
-            data = np.digitize(self, [cutoffs], right)
-
-        if (function is None) and (values is None):
-            return Curve(data, params=params)
-
-        data = data.astype(float)
-
-        # Set the function for reducing.
-        f = function or utils.null
-
-        # Find the tops of the 'zones'.
-        tops, vals = utils.find_edges(data)
-
-        # End of array trick... adding this should remove the
-        # need for the marked lines below. But it doesn't.
-        # np.append(tops, None)
-        # np.append(vals, None)
-
-        if values is None:
-            # Transform each segment in turn, then deal with the last segment.
-            for top, base in zip(tops[:-1], tops[1:]):
-                data[top:base] = f(np.copy(self[top:base]))
-            data[base:] = f(np.copy(self[base:]))  # See above
-        else:
-            for top, base, val in zip(tops[:-1], tops[1:], vals[:-1]):
-                data[top:base] = values[int(val)]
-            data[base:] = values[int(vals[-1])]  # See above
-
-        return Curve(data, params=params)
-
-    def _rolling_window(self, window_length, func1d, step=1, return_rolled=False):
-        """
-        Private function. Smoother for other smoothing/conditioning functions.
-
-        Args:
-            window_length (int): the window length.
-            func1d (function): a function that takes a 1D array and returns a
-                scalar.
-            step (int): if you want to skip samples in the shifted versions.
-                Don't use this for smoothing, you will get strange results.
-
-        Returns:
-            ndarray: the resulting array.
-        """
-        # Force odd.
-        if window_length % 2 == 0:
-            window_length += 1
-
-        shape = self.shape[:-1] + (self.shape[-1], window_length)
-        strides = self.strides + (step*self.strides[-1],)
-        data = np.nan_to_num(self)
-        data = np.pad(data, int(step*window_length//2), mode='edge')
-        rolled = np.lib.stride_tricks.as_strided(data,
-                                                 shape=shape,
-                                                 strides=strides)
-        result = np.apply_along_axis(func1d, -1, rolled)
-        result[np.isnan(self)] = np.nan
-
-        if return_rolled:
-            return result, rolled
-        else:
-            return result
-
-    def despike(self, window_length=33, samples=True, z=2):
-        """
-        Args:
-            window (int): window length in samples. Default 33 (or 5 m for
-                most curves sampled at 0.1524 m intervals).
-            samples (bool): window length is in samples. Use False for a window
-                length given in metres.
-            z (float): Z score
-
-        Returns:
-            Curve.
-        """
-        window_length //= 1 if samples else self.step
-        z *= np.nanstd(self)  # Transform to curve's units
-        curve_sm = self._rolling_window(window_length, np.median)
-        spikes = np.where(np.nan_to_num(self - curve_sm) > z)[0]
-        spukes = np.where(np.nan_to_num(curve_sm - self) > z)[0]
-        out = np.copy(self)
-        params = self.__dict__.copy()
-        out[spikes] = curve_sm[spikes] + z
-        out[spukes] = curve_sm[spukes] - z
-        return Curve(out, params=params)
-
-    def apply(self, window_length, samples=True, func1d=None):
-        """
-        Runs any kind of function over a window.
-
-        Args:
-            window_length (int): the window length. Required.
-            samples (bool): window length is in samples. Use False for a window
-                length given in metres.
-            func1d (function): a function that takes a 1D array and returns a
-                scalar. Default: ``np.mean()``.
-
-        Returns:
-            Curve.
-        """
-        window_length /= 1 if samples else self.step
-        if func1d is None:
-            func1d = np.mean
-        params = self.__dict__.copy()
-        out = self._rolling_window(int(window_length), func1d)
-        return Curve(out, params=params)
-
-    smooth = apply
-
 
 def from_las():
     """
     Instantiate a Curve object from a SEG-Y file.
     """
+    pass
+
 
 def from_lasio_curve(cls, curve,
-                        depth=None,
-                        basis=None,
-                        start=None,
-                        stop=None,
-                        step=0.1524,
-                        run=-1,
-                        null=-999.25,
-                        service_company=None,
-                        date=None):
+                     depth=None,
+                     basis=None,
+                     start=None,
+                     stop=None,
+                     step=0.1524,
+                     run=-1,
+                     null=-999.25,
+                     service_company=None,
+                     date=None):
     """
     Makes a curve object from a lasio curve object and either a depth
     basis or start and step information.
@@ -420,8 +188,6 @@ def from_lasio_curve(cls, curve,
         else:
             step = (stop - start) / (curve.data.shape[0] - 1)
 
-    # Interpolate into this.
-
     params = {}
     params['mnemonic'] = curve.mnemonic
     params['description'] = curve.descr
@@ -435,4 +201,3 @@ def from_lasio_curve(cls, curve,
     params['code'] = curve.API_code
 
     return cls(data, params=params)
-
