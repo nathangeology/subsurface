@@ -1,4 +1,4 @@
-# -*- coding: utf 8 -*-
+# -*- coding: utf-8 -*-
 """
 Python installation file.
 """
@@ -23,10 +23,15 @@ DESCRIPTION_FILE = path.join(this_directory, 'README.md')
 with open(DESCRIPTION_FILE, 'r', encoding='utf-8') as f:
     long_description = f.read()
 
-REQUIREMENTS = ['numpy',
+REQUIREMENTS = ['xarray',
+                'segyio',
+                'pint',
                 ]
 
 TEST_REQUIREMENTS = ['pytest',
+                     'coveralls',
+                     'pytest-cov',
+                     'pytest-mpl',
                      ]
 
 CLASSIFIERS = ['Development Status :: 3 - Alpha',
