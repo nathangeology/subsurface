@@ -1,10 +1,11 @@
-# -*- coding: utf 8 -*-
+# -*- coding: utf-8 -*-
 """
 Python installation file.
 """
 import numpy as np
 import xarray as xr
 import matplotlib.pyplot as plt
+import lasio
 
 
 class CurveError(Exception):
@@ -42,6 +43,9 @@ class Curve(object):
             params (dict): More attributes of the curve. Can include 'units',
                 'run', 'null', 'service_company', 'date', 'code'.
         """
+        if params is None:
+            params = {}
+
         self.domain = domain
         self.units = params.get('units', None)
         self.run = params.get('run', 0)
@@ -55,6 +59,7 @@ class Curve(object):
                                     coords=np.atleast_2d(basis),
                                     dims=[domain],
                                     )
+
         return
 
     def __getattr__(self, attr):
@@ -169,7 +174,7 @@ class Curve(object):
     def get_step(arr):
         diffs = np.diff(arr)
         if np.allclose(diffs[0], diffs):
-            return np.asscalar(diffs[0])
+            return diffs[0].item()  # Returns a scalar.
         else:
             raise(CurveError("The step sizes are not equal."))
 
@@ -247,7 +252,9 @@ def from_lasio(curve,
             m = "You must provide a basis, or a start and stop depth."
             raise CurveError(m)
     else:
-        basis = np.array(basis)
+        if isinstance(basis, lasio.las_items.CurveItem):
+            basis = basis.data
+        basis = np.asarray(basis)
         start = basis[0]
         stop = basis[-1]
         try:
