@@ -1,9 +1,7 @@
-# -*- coding: utf 8 -*-
+# -*- coding: utf-8 -*-
 """
-Unit implrementation using mod:`pint`.
+Unit implementation using :mod:`pint`.
 """
-
-import numpy as np
 import pint
 import pint.unit
 
@@ -25,3 +23,5 @@ units.define('boe = barrels_of_oil_equivalent = 6 Mcf')
 units.define('BTU = british_thermal_unit = 1055.05585262 Joule')
 units.define('percent = 0.01*count = %')
 units.define('permille = 0.001*count = %')
+
+del pint

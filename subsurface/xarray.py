@@ -1,19 +1,18 @@
+# -*- coding: utf-8 -*-
 # Copyright (c) 2019 Subsurface Developers, where applicable.
 # Copyright (c) 2018 MetPy Developers, where applicable.
 # Distributed under the terms of the BSD 3-Clause License.
 # SPDX-License-Identifier: BSD-3-Clause
-
-"""Accessors to provide basic functions for Subsurface objects."""
-
+"""
+Accessors to provide basic functions for Subsurface objects.
+"""
 import functools
 
 import xarray as xr
-
-from xarray.core.accessors import DatetimeAccessor
 from xarray.core.indexing import expanded_indexer
 from xarray.core.utils import either_dict_or_kwargs, is_dict_like
+from .units import units
 
-from .units import DimensionalityError, units
 
 @xr.register_dataarray_accessor('subsurface')
 class SubsurfaceAccessor(object):
@@ -60,7 +59,7 @@ class SubsurfaceAccessor(object):
         """Return the coordinate reference system (CRS) as a cartopy object."""
         return self.crs.to_cartopy()
 
-    #def _axis(self, axis):
+    # def _axis(self, axis):
     #    """Return the coordinate variable corresponding to the given individual axis type."""
     #    if axis in readable_to_cf_axes:
     #        for coord_var in self._data_array.coords.values():
@@ -76,20 +75,20 @@ class SubsurfaceAccessor(object):
         for arg in args:
             yield self._axis(arg)
 
-    #@property
-    #def time(self):
+    # @property
+    # def time(self):
     #    return self._axis('time')
 
-    #@property
-    #def vertical(self):
+    # @property
+    # def vertical(self):
     #    return self._axis('vertical')
 
-    #@property
-    #def y(self):
+    # @property
+    # def y(self):
     #    return self._axis('y')
 
-    #@property
-    #def x(self):
+    # @property
+    # def x(self):
     #    return self._axis('x')
 
     def coordinates_identical(self, other):
@@ -159,7 +158,6 @@ class SubsurfaceAccessor(object):
         indexers = either_dict_or_kwargs(indexers, indexers_kwargs, 'sel')
         indexers = _reassign_quantity_indexer(self._data_array, indexers)
         return dtype(self._data_array.sel(indexers, method=method, tolerance=tolerance, drop=drop))
-        
 
 
 def _reassign_quantity_indexer(data, indexers):
@@ -192,6 +190,7 @@ def _reassign_quantity_indexer(data, indexers):
 
     return indexers
 
+
 def check_matching_coordinates(func):
     """Decorate a function to make sure all given DataArrays have matching coordinates."""
     @functools.wraps(func)
@@ -205,6 +204,7 @@ def check_matching_coordinates(func):
                     raise ValueError('Input DataArray arguments must be on same coordinates.')
         return func(*args, **kwargs)
     return wrapper
+
 
 def preprocess_xarray(func):
     """Decorate a function to convert all DataArray arguments to pint.Quantities.
