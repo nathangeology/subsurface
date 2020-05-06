@@ -5,3 +5,4 @@ segyio
 pytest
 matplotlib
 pyvista
+PyYAML
